@@ -4,53 +4,57 @@ from urllib.parse import unquote_plus
 from PIL import Image
 
 s3_client = boto3.client('s3')
-OUTPUT_BUCKET = "blogsite-output-bucket-821hwkjqr"
+
+# Maximum dimensions for resizing
+MAX_WIDTH = 800
+MAX_HEIGHT = 800
 
 def resize_image(image_path, resized_path):
+    """
+    Resize the image to fit within MAX_WIDTH x MAX_HEIGHT while maintaining aspect ratio.
+    """
     with Image.open(image_path) as image:
-        image.thumbnail((image.width // 2, image.height // 2))
+        image.thumbnail((MAX_WIDTH, MAX_HEIGHT))
         image.save(resized_path)
-        return image.get_format_mimetype()
+        # Return correct content type for upload
+        return Image.MIME.get(image.format, 'image/jpeg')
 
 def lambda_handler(event, context):
     for record in event['Records']:
-        source_bucket = record['s3']['bucket']['name']
-        source_key = unquote_plus(record['s3']['object']['key'])
+        bucket = record['s3']['bucket']['name']
+        key = unquote_plus(record['s3']['object']['key'])
 
-        if source_key.startswith("resized/"):
-            print(f"Skipping already resized image: {source_key}")
+        # Skip already processed files (optional, e.g., avoid recursive triggers)
+        if key.startswith("resized-temp/"):  # or any temporary marker if needed
+            print(f"Skipping already processed file: {key}")
             continue
 
-        filename = os.path.basename(source_key)
-        folder = os.path.dirname(source_key)
+        filename = os.path.basename(key)
+        folder = os.path.dirname(key)
 
-        # Local temporary paths in Lambda
         download_path = f"/tmp/{filename}"
         resized_path = f"/tmp/resized-{filename}"
 
-        # Output S3 key
-        output_key = f"resized/{folder}/{filename}" if folder else f"resized/{filename}"
-
-        # Download from source bucket
-        s3_client.download_file(source_bucket, source_key, download_path)
-        print(f"Downloaded {source_key} from bucket {source_bucket}")
+        # Download original image
+        s3_client.download_file(bucket, key, download_path)
+        print(f"Downloaded {key} from bucket {bucket}")
 
         # Resize image
         content_type = resize_image(download_path, resized_path)
         print(f"Resized image saved to {resized_path}")
 
-        # Upload to output bucket
+        # Overwrite original image with resized one
         s3_client.upload_file(
             resized_path,
-            OUTPUT_BUCKET,
-            output_key,
+            bucket,
+            key,  # same key as original
             ExtraArgs={'ContentType': content_type}
         )
+        print(f"Overwritten original image with resized version: {bucket}/{key}")
 
-        print(f"Uploaded resized image to {OUTPUT_BUCKET}/{output_key}")
-
-        try:
-            os.remove(download_path)
-            os.remove(resized_path)
-        except Exception as e:
-            print(f"Cleanup error: {e}")
+        # Cleanup Lambda temp files
+        for path in [download_path, resized_path]:
+            try:
+                os.remove(path)
+            except Exception as e:
+                print(f"Cleanup error: {e}")
