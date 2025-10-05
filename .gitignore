@@ -214,3 +214,6 @@ app/Dockerfile
 k8s
 .idea/aws.xml
 .DS_Store
+
+./app/buildNpush.sh
+./nginx/buildNpush.sh
