@@ -13,7 +13,7 @@ class PostAdmin(admin.ModelAdmin):
     ordering = ['status', 'publish']
     show_facets = admin.ShowFacets.ALWAYS
 
-@@admin.register(Comment)
+@admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = ['name', 'email', 'post', 'created', 'active']
     list_filter = ['active', 'created', 'updated']
