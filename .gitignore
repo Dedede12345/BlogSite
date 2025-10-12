@@ -212,4 +212,4 @@ app/blogsite/db.sqlite3
 app/Dockerfile
 .idea/
 .idea/aws.xml
-.DS_Store
+ .DS_Store
